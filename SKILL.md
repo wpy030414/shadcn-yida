@@ -36,6 +36,28 @@ description: 在宜搭 Code Canvas 中使用 shadcn/ui 设计语言构建应用�
 4. **颜色用语义** — 始终用 shadcn 语义 token（`tw-bg-muted`），禁止硬编码色值（`#f5f5f5`）
 5. **Badge 注意 padding** — Badge 自带 padding，与其他无 padding 元素并排时会导致边缘不对齐；纯文字对齐场景改用 `<span>`
 
+## 页面布局模式
+
+所有宜搭 Canvas 页面遵循统一的 **Shell + View** 二层结构：
+
+```
+oy-scope (全屏壳子, min-h-screen, p-4 / 桌面 p-8)
+├─ <style> (手写 CSS + 主题变量)
+├─ tw-mx-auto tw-max-w-5xl (居中容器, 最大 1024px)
+│  ├─ <header>   — 标题组 + 操作组, flex justify-between
+│  ├─ <nav>      — 下划线 Tab 导航 (可选)
+│  └─ <main>     — min-h-[400px], 路由分发 View
+├─ <Toaster />   — 全局 toast 浮层
+└─ confirmDialog — 全局确认弹窗 (可选)
+```
+
+**核心规则**：
+- Shell 用 `tw-p-4 min-[900px]:tw-p-8` 做移动/桌面响应式间距
+- 居中容器默认 `tw-max-w-5xl`（64rem），阅读型用 `tw-max-w-3xl`，仪表盘用 `tw-max-w-7xl`
+- Header 的标题组和操作组用 `tw-flex-wrap` 兜底窄屏换行
+- Nav Tab 用下划线指示器（`tw-absolute tw-bottom-0 tw-h-0.5 tw-bg-primary`），不用背景色切换
+- 页面区块间 `tw-space-y-6`，区块内 `tw-space-y-4`，紧凑元素 `tw-space-y-2`
+
 ## 适配工作流
 
 ### 阶段 1：CSS 基础设施
@@ -50,16 +72,19 @@ description: 在宜搭 Code Canvas 中使用 shadcn/ui 设计语言构建应用�
 1. 简单组件（无 Radix 依赖）：Button、Card、Badge、Skeleton 等直接从 shadcn 源码移植，加前缀
 2. 复合组件（有 Radix 依赖）：Dialog、Popover、ContextMenu 等保留视觉样式，自实现交互逻辑
 
-### 阶段 3：页面集成
+### 阶段 3：页面布局与集成
 
-1. 用 scoped class 包裹页面根元素
-2. 内嵌 `<style>` 标签包含所有手写 CSS
-3. 注入主题色（从宿主平台读取品牌色，转为 HSL channel format）
+1. 搭建 Shell 壳子（`oy-scope` + 居中容器 + 主题注入）
+2. 组装 Header（标题组 + 操作组）+ Nav（下划线 Tab，可选）+ Main
+3. 用 scoped class 包裹页面根元素
+4. 内嵌 `<style>` 标签包含所有手写 CSS + 主题变量
+5. 注入品牌色（从宿主平台读取，转为 HSL channel format）
 
 ## 参考文档
 
 | 文档 | 覆盖范围 | 何时阅读 |
 |------|---------|---------|
+| [page-layout.md](references/page-layout.md) | Shell 壳子、Header/Nav/Main 布局模式、间距节奏、响应式策略、完整骨架模板 | **开始新页面时必读**，或调整页面结构时 |
 | [css-adaptation.md](references/css-adaptation.md) | class 前缀、CSS 变量命名空间、HSL format、scoped reset、手写 CSS 策略 | 开始新项目或遇到样式冲突时 |
 | [component-migration.md](references/component-migration.md) | 简单组件/复合组件移植方法、cn() 函数实现、通用移植示例 | 移植新组件时 |
 | [design-conventions.md](references/design-conventions.md) | 圆角体系、颜色语义、组件使用原则 | 确保设计一致性时 |
