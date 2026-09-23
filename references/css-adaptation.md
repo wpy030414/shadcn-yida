@@ -1,32 +1,27 @@
 # CSS 适配方案详解
 
-## class 前缀隔离
+## Tailwind CDN 浏览器运行时
 
-所有 Tailwind class 加 `tw-` 前缀，防止被宿主平台全局样式覆盖：
+oyd.jsx 页面使用 `@tailwindcss/browser` 浏览器运行时加载 Tailwind，**无需构建管线**。这意味着：
 
+- Tailwind class 名**不加前缀**（`flex`、`p-4`、`bg-primary`，非 `tw-flex`、`tw-p-4`）
+- 通过 `<style type="text/tailwindcss">` 声明 `@theme` 扩展
+- CDN 来自已验证的阿里 CDN 地址，国内网络可达
+
+### 推荐 CDN 地址
+
+```javascript
+var TAILWIND_CDN = 'https://g.alicdn.com/code/lib/tailwindcss-browser/0.0.0-insiders.fed6c6a/index.global.min.js';
 ```
-flex            →  tw-flex
-p-4             →  tw-p-4
-bg-primary      →  tw-bg-primary
-hover:bg-accent →  hover:tw-bg-accent
-focus-visible:ring-1 → focus-visible:tw-ring-1
-```
 
-对应手写 CSS 也要带前缀：
-
-```css
-.tw-flex { display: flex; }
-.tw-p-4 { padding: 1rem; }
-.tw-bg-primary { background-color: hsl(var(--oy-primary)); }
-.hover\:tw-bg-accent:hover { background-color: hsl(var(--oy-accent)); }
-```
+> 私有化/内网环境可替换为企业自托管地址。禁止使用 `cdn.tailwindcss.com`、`jsdelivr`、`unpkg` 等海外 CDN。
 
 ## CSS 变量命名空间
 
-shadcn 用 `--background`、`--foreground` 等通用变量名，在受限环境中会与平台内置变量冲突。用自定义前缀隔离：
+shadcn 用 `--background`、`--foreground` 等通用变量名，在宜搭平台中会与内置变量冲突。用 `--oy-` 前缀隔离：
 
 ```css
-/* shadcn 原版 */                    /* 适配版（以 --oy- 为例） */
+/* shadcn 原版 */                    /* 适配版 */
 --background: 0 0% 100%;           --oy-background: 0 0% 100%;
 --foreground: 240 10% 3.9%;        --oy-foreground: 240 10% 3.9%;
 --card: 0 0% 100%;                 --oy-card: 0 0% 100%;
@@ -44,23 +39,19 @@ shadcn 用 `--background`、`--foreground` 等通用变量名，在受限环境�
 --radius: 0.5rem;                    --oy-radius: 0.5rem;
 ```
 
-前缀选择原则：用项目缩写（如 `--oy-`、`--app-`、`--my-`），避免与任何已知平台变量冲突。
+### 在 Tailwind 中消费
 
-组件中所有 CSS 变量引用同步替换：
+通过 Tailwind 任意值语法引用 CSS 变量：
 
-```css
-/* shadcn 原版 */
-background-color: hsl(var(--background));
-border-color: hsl(var(--border));
-
-/* 适配版 */
-background-color: hsl(var(--oy-background));
-border-color: hsl(var(--oy-border));
+```html
+<div className="bg-[hsl(var(--oy-background))] text-[hsl(var(--oy-foreground))]">
+<div className="border-[hsl(var(--oy-border))]">
+<div className="bg-[hsl(var(--oy-primary)/0.1)]">  <!-- 透明度 0.1 -->
 ```
 
 ## HSL channel format
 
-CSS 变量必须存 HSL 通道值（不带 `hsl()` 包裹），以支持透明度修饰：
+CSS 变量必须存 HSL 通道值（不带 `hsl()` 包裹），以支持透明度：
 
 ```css
 --oy-brand: 216 33% 47%;       /* ✅ 可用 hsl(var(--oy-brand) / 0.5) */
@@ -68,117 +59,318 @@ CSS 变量必须存 HSL 通道值（不带 `hsl()` 包裹），以支持透明�
 --oy-brand: hsl(216 33% 47%);  /* ❌ 嵌套 hsl 无效 */
 ```
 
+### hex → HSL 转换
+
 品牌色从宿主平台读取时通常是 hex 格式，需要转换：
 
 ```javascript
 function hexToHsl(hex) {
-  const rgb = hexToRgb(hex);
-  if (!rgb) return null;
-  const [r, g, b] = rgb.map(c => c / 255);
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  let h = 0, s = 0;
-  const l = (max + min) / 2;
+  hex = hex.replace(/^#/, '');
+  if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+  var r = parseInt(hex.substring(0, 2), 16) / 255;
+  var g = parseInt(hex.substring(2, 4), 16) / 255;
+  var b = parseInt(hex.substring(4, 6), 16) / 255;
+  var max = Math.max(r, g, b), min = Math.min(r, g, b);
+  var h = 0, s = 0;
+  var l = (max + min) / 2;
   if (max !== min) {
-    const d = max - min;
+    var d = max - min;
     s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
     if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
     else if (max === g) h = ((b - r) / d + 2) / 6;
     else h = ((r - g) / d + 4) / 6;
   }
-  return Math.round(h * 360) + " " + Math.round(s * 100) + "% " + Math.round(l * 100) + "%";
+  return Math.round(h * 360) + ' ' + Math.round(s * 100) + '% ' + Math.round(l * 100) + '%';
 }
 ```
 
-## scoped reset
+## didMount 注入三件套
 
-用 scoped class 包裹页面根元素，做 box-sizing 和字体 reset，不影响宿主 chrome：
+oyd.jsx 页面在 `didMount` 中完成 CSS 基础设施的注入，包含三部分：
 
-```css
-.oy-scope {
-  box-sizing: border-box;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
-    'Microsoft YaHei', sans-serif;
-  background: hsl(var(--oy-background));
-  color: hsl(var(--oy-foreground));
-  -webkit-font-smoothing: antialiased;
-}
-.oy-scope *,
-.oy-scope *::before,
-.oy-scope *::after {
-  box-sizing: border-box;
-  border-color: hsl(var(--oy-border));
+### 1. Tailwind CDN 加载
+
+```javascript
+export function ensureTailwind() {
+  var self = this;
+
+  if (window.__openyidaTailwindReady) return Promise.resolve();
+  if (window.__openyidaTailwindLoading) return window.__openyidaTailwindLoading;
+
+  if (!TAILWIND_CDN) {
+    self.injectTailwindFallback();
+    return Promise.resolve();
+  }
+
+  self.injectTailwindSource();
+
+  window.__openyidaTailwindLoading = self.utils.loadScript(TAILWIND_CDN)
+    .then(function() {
+      window.__openyidaTailwindReady = true;
+      self.forceUpdate();
+    })
+    .catch(function() {
+      window.__openyidaTailwindFailed = true;
+      self.injectTailwindFallback();
+      self.forceUpdate();
+    });
+
+  return window.__openyidaTailwindLoading;
 }
 ```
 
-关键点：
-- scoped class 名称自定义（`.oy-scope`、`.my-app-scope` 等）
-- 只 reset box-sizing 和字体，不 reset margin/padding（避免影响宿主）
-- border-color 统一设置，确保所有子元素边框颜色一致
+### 2. Tailwind 源码注入（`<style type="text/tailwindcss">`）
 
-## 手写 CSS 策略
+```javascript
+export function injectTailwindSource() {
+  if (document.getElementById('openyida-tailwind-source')) return;
 
-没有 Tailwind 构建器，需要在页面内嵌 `<style>` 标签，只写**实际用到的** utility classes：
-
-### 收集方法
-
-1. 先按 shadcn 组件正常写代码，用带前缀的 class 名
-2. 用正则提取所有用到的 class：`/tw-[a-zA-Z0-9\-\/\[\]\.]+/g`
-3. 为每个 class 生成对应的 CSS 定义
-
-### 常用 utility classes 参考
-
-```css
-/* 布局 */
-.tw-flex { display: flex; }
-.tw-inline-flex { display: inline-flex; }
-.tw-grid { display: grid; }
-.tw-hidden { display: none; }
-.tw-flex-col { flex-direction: column; }
-.tw-flex-wrap { flex-wrap: wrap; }
-.tw-flex-1 { flex: 1 1 0%; }
-.tw-shrink-0 { flex-shrink: 0; }
-.tw-items-center { align-items: center; }
-.tw-justify-between { justify-content: space-between; }
-.tw-justify-center { justify-content: center; }
-.tw-gap-2 { gap: 0.5rem; }
-.tw-gap-4 { gap: 1rem; }
-
-/* 间距 */
-.tw-p-4 { padding: 1rem; }
-.tw-px-4 { padding-left: 1rem; padding-right: 1rem; }
-.tw-py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
-
-/* 圆角（用 token） */
-.tw-rounded-lg { border-radius: var(--oy-radius); }
-.tw-rounded-md { border-radius: calc(var(--oy-radius) - 0.25rem); }
-.tw-rounded-sm { border-radius: calc(var(--oy-radius) - 0.375rem); }
-.tw-rounded-full { border-radius: 9999px; }
-
-/* 语义色 */
-.tw-bg-background { background-color: hsl(var(--oy-background)); }
-.tw-bg-card { background-color: hsl(var(--oy-card)); }
-.tw-bg-primary { background-color: hsl(var(--oy-primary)); }
-.tw-bg-muted { background-color: hsl(var(--oy-muted)); }
-.tw-bg-accent { background-color: hsl(var(--oy-accent)); }
-.tw-text-foreground { color: hsl(var(--oy-foreground)); }
-.tw-text-muted-foreground { color: hsl(var(--oy-muted-foreground)); }
-.tw-text-primary { color: hsl(var(--oy-primary)); }
-.tw-border-border { border-color: hsl(var(--oy-border)); }
-```
-
-### 交互状态
-
-```css
-.hover\:tw-bg-accent:hover { background-color: hsl(var(--oy-accent)); }
-.focus-visible\:tw-ring-1:focus-visible {
-  box-shadow: 0 0 0 1px hsl(var(--oy-ring));
+  var style = document.createElement('style');
+  style.id = 'openyida-tailwind-source';
+  style.type = 'text/tailwindcss';
+  style.innerHTML = [
+    '@import "tailwindcss/theme";',
+    '@import "tailwindcss/preflight";',
+    '@import "tailwindcss/utilities";',
+    '@theme {',
+    '  --color-brand: var(--color-brand1-6, #2F6FED);',
+    '}',
+  ].join('\n');
+  document.head.appendChild(style);
 }
-.disabled\:tw-opacity-50:disabled { opacity: 0.5; }
 ```
 
-### 变体前缀
+> `@theme` 中可以用标准 CSS 变量桥接到平台品牌色变量（`--color-brand1-*`），让 Tailwind 的 `text-brand`、`bg-brand` 等 class 跟随应用主题。
 
-```css
-.hover\:tw-bg-primary\/90:hover { background-color: hsl(var(--oy-primary) / 0.9); }
-.tw-bg-success\/10 { background-color: hsl(var(--oy-success) / 0.1); }
+### 3. Native Control Reset + 主题变量
+
+```javascript
+export function injectOyStyle() {
+  var style = document.getElementById('oy-shadcn-style');
+  if (style) {
+    // 页面专属 style id，每次都刷新内容
+    style.innerHTML = buildOyCss();
+    return;
+  }
+  style = document.createElement('style');
+  style.id = 'oy-shadcn-style';
+  style.innerHTML = buildOyCss();
+  document.head.appendChild(style);
+}
+
+function buildOyCss() {
+  var brand = readBrandColor(6, '#4a6fa5');
+  var brandHsl = hexToHsl(brand);
+  return [
+    '/* ---- scoped reset ---- */',
+    '.oyd-page {',
+    '  box-sizing: border-box;',
+    '  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;',
+    '  background: hsl(var(--oy-background));',
+    '  color: hsl(var(--oy-foreground));',
+    '  -webkit-font-smoothing: antialiased;',
+    '}',
+    '.oyd-page *, .oyd-page *::before, .oyd-page *::after {',
+    '  box-sizing: border-box;',
+    '  border-color: hsl(var(--oy-border));',
+    '}',
+    '',
+    '/* ---- shadcn 主题变量（light） ---- */',
+    '.oyd-page {',
+    '  --oy-background: 0 0% 100%;',
+    '  --oy-foreground: 240 10% 3.9%;',
+    '  --oy-card: 0 0% 100%;',
+    '  --oy-card-foreground: 240 10% 3.9%;',
+    '  --oy-primary: ' + (brand ? 'var(--oy-brand)' : '240 5.9% 10%') + ';',
+    '  --oy-primary-foreground: 0 0% 98%;',
+    '  --oy-secondary: 240 4.8% 95.9%;',
+    '  --oy-secondary-foreground: 240 5.9% 10%;',
+    '  --oy-muted: 240 4.8% 95.9%;',
+    '  --oy-muted-foreground: 240 3.8% 45.1%;',
+    '  --oy-accent: 240 4.8% 95.9%;',
+    '  --oy-accent-foreground: 240 5.9% 10%;',
+    '  --oy-destructive: 0 72% 51%;',
+    '  --oy-destructive-foreground: 0 0% 98%;',
+    '  --oy-border: 240 5.9% 90%;',
+    '  --oy-input: 240 5.9% 90%;',
+    '  --oy-ring: 240 5.9% 10%;',
+    '  --oy-radius: 0.5rem;',
+    '  --oy-brand: ' + brandHsl + ';',
+    '}',
+    '',
+    '/* ---- dark mode ---- */',
+    '@media (prefers-color-scheme: dark) {',
+    '  .oyd-page {',
+    '    --oy-background: 240 10% 3.9%;',
+    '    --oy-foreground: 0 0% 98%;',
+    '    --oy-card: 240 10% 3.9%;',
+    '    --oy-card-foreground: 0 0% 98%;',
+    '    --oy-primary: var(--oy-brand);',
+    '    --oy-primary-foreground: 240 5.9% 10%;',
+    '    --oy-secondary: 240 3.7% 15.9%;',
+    '    --oy-secondary-foreground: 0 0% 98%;',
+    '    --oy-muted: 240 3.7% 15.9%;',
+    '    --oy-muted-foreground: 240 5% 64.9%;',
+    '    --oy-accent: 240 3.7% 15.9%;',
+    '    --oy-accent-foreground: 0 0% 98%;',
+    '    --oy-destructive: 0 62.8% 30.6%;',
+    '    --oy-destructive-foreground: 0 85.7% 97.3%;',
+    '    --oy-border: 240 3.7% 15.9%;',
+    '    --oy-input: 240 3.7% 15.9%;',
+    '    --oy-ring: 240 4.9% 83.9%;',
+    '  }',
+    '}',
+    '',
+    '/* ---- native control reset ---- */',
+    '.oyd-page input, .oyd-page textarea, .oyd-page select {',
+    '  appearance: none; -webkit-appearance: none;',
+    '  font-family: inherit; font-weight: 400;',
+    '  color: hsl(var(--oy-foreground));',
+    '  outline: none !important; box-shadow: none;',
+    '}',
+    '.oyd-page input, .oyd-page textarea {',
+    '  border: 1px solid hsl(var(--oy-input));',
+    '  border-radius: calc(var(--oy-radius) - 0.25rem);',
+    '  background: hsl(var(--oy-background));',
+    '}',
+    '.oyd-page input:focus, .oyd-page textarea:focus, .oyd-page select:focus {',
+    '  border-color: hsl(var(--oy-ring)) !important;',
+    '  outline: none !important;',
+    '  box-shadow: 0 0 0 2px hsl(var(--oy-ring) / 0.3) !important;',
+    '}',
+  ].join('\n');
+}
+
+function readBrandColor(level, fallback) {
+  try {
+    var v = getComputedStyle(document.documentElement)
+      .getPropertyValue('--color-brand1-' + (level || 6)).trim();
+    return v || fallback;
+  } catch (e) { return fallback; }
+}
+```
+
+### didMount 汇总
+
+```javascript
+export function didMount() {
+  this.injectOyStyle();          // 主题变量 + scoped reset + native control reset
+  this.injectTailwindSource();   // Tailwind @theme 声明
+  this.ensureTailwind();         // 异步加载 Tailwind CDN
+  // 页面数据初始化...
+}
+```
+
+## Tailwind 加载失败 Fallback
+
+当 CDN 不可达时，通过 fallback `<style>` 提供关键布局和组件的兜底样式。使用 `.oyd-btn`、`.oyd-input` 等 class 补充被跳过的 Tailwind utility。
+
+### Fallback 样式模板
+
+```javascript
+export function injectTailwindFallback() {
+  if (document.getElementById('oy-tailwind-fallback')) return;
+
+  var style = document.createElement('style');
+  style.id = 'oy-tailwind-fallback';
+  style.innerHTML = [
+    '/* 布局 */',
+    '.oyd-min-h-screen { min-height: 100vh; }',
+    '.oyd-flex { display: flex; }',
+    '.oyd-inline-flex { display: inline-flex; }',
+    '.oyd-hidden { display: none; }',
+    '.oyd-flex-col { flex-direction: column; }',
+    '.oyd-flex-wrap { flex-wrap: wrap; }',
+    '.oyd-items-center { align-items: center; }',
+    '.oyd-justify-between { justify-content: space-between; }',
+    '.oyd-justify-center { justify-content: center; }',
+    '.oyd-gap-2 { gap: 0.5rem; }',
+    '.oyd-gap-4 { gap: 1rem; }',
+    '',
+    '/* 间距 */',
+    '.oyd-p-4 { padding: 1rem; }',
+    '.oyd-px-4 { padding-left: 1rem; padding-right: 1rem; }',
+    '.oyd-py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }',
+    '.oyd-mx-auto { margin-left: auto; margin-right: auto; }',
+    '.oyd-mt-1 { margin-top: 0.25rem; }',
+    '',
+    '/* 容器 */',
+    '.oyd-max-w-5xl { max-width: 64rem; }',
+    '.oyd-max-w-3xl { max-width: 48rem; }',
+    '',
+    '/* 圆角 */',
+    '.oyd-rounded-lg { border-radius: var(--oy-radius); }',
+    '.oyd-rounded-md { border-radius: calc(var(--oy-radius) - 0.25rem); }',
+    '',
+    '/* 字号 */',
+    '.oyd-text-sm { font-size: 0.875rem; line-height: 1.25rem; }',
+    '.oyd-text-xs { font-size: 0.75rem; line-height: 1rem; }',
+    '.oyd-text-lg { font-size: 1.125rem; line-height: 1.75rem; }',
+    '.oyd-text-2xl { font-size: 1.5rem; line-height: 2rem; }',
+    '.oyd-font-medium { font-weight: 500; }',
+    '.oyd-font-semibold { font-weight: 600; }',
+    '.oyd-tracking-tight { letter-spacing: -0.025em; }',
+    '',
+    '/* 语义色 */',
+    '.oyd-bg-background { background-color: hsl(var(--oy-background)); }',
+    '.oyd-bg-card { background-color: hsl(var(--oy-card)); }',
+    '.oyd-bg-muted { background-color: hsl(var(--oy-muted)); }',
+    '.oyd-bg-primary { background-color: hsl(var(--oy-primary)); }',
+    '.oyd-text-foreground { color: hsl(var(--oy-foreground)); }',
+    '.oyd-text-muted-foreground { color: hsl(var(--oy-muted-foreground)); }',
+    '.oyd-text-primary-foreground { color: hsl(var(--oy-primary-foreground)); }',
+    '.oyd-border { border-width: 1px; }',
+    '.oyd-border-b { border-bottom-width: 1px; }',
+    '.oyd-border-border { border-color: hsl(var(--oy-border)); }',
+    '',
+    '/* 控件 */',
+    '.oyd-btn { display:inline-flex;align-items:center;justify-content:center;',
+    '  gap:0.5rem;white-space:nowrap;border-radius:calc(var(--oy-radius) - 0.25rem);',
+    '  font-size:0.875rem;font-weight:500;transition:background-color 0.15s;',
+    '  height:2.5rem;padding:0.5rem 1rem;cursor:pointer;}',
+    '.oyd-btn-primary { background:hsl(var(--oy-primary));color:hsl(var(--oy-primary-foreground));border:none;}',
+    '.oyd-btn-outline { background:transparent;border:1px solid hsl(var(--oy-input));}',
+    '.oyd-btn-ghost { background:transparent;border:none;}',
+    '.oyd-input { height:2.25rem;padding:0 0.75rem;',
+    '  border:1px solid hsl(var(--oy-input));border-radius:calc(var(--oy-radius) - 0.25rem);',
+    '  background:hsl(var(--oy-background));font-size:0.875rem;}',
+    '',
+    '/* 响应式 */',
+    '@media (min-width: 900px) { .oyd-min-900-p-8 { padding: 2rem; } }',
+  ].join('');
+  document.head.appendChild(style);
+}
+```
+
+> Fallback class 以 `.oyd-` 开头（区别于 Tailwind 原生 class），仅在 Tailwind 加载失败后启用。正常运行时 Tailwind class 覆盖之。
+
+### 运行时 class 选择
+
+在 `renderJsx` 中同时使用 Tailwind class 和 fallback class：
+
+```jsx
+<div className={`oyd-page oyd-min-h-screen oyd-bg-background min-h-screen bg-[hsl(var(--oy-background))] p-4 oyd-p-4 min-[900px]:p-8`}>
+```
+
+规则：**Tailwind class 优先，fallback `.oyd-*` class 兜底**。两者写在同一个 `className` 属性上，CSS 级联由加载顺序决定。
+
+## 主题色注入
+
+品牌色从宿主平台读取，转为 HSL channel format 后写入 CSS 变量：
+
+```javascript
+function readBrandColor(level, fallback) {
+  try {
+    var v = getComputedStyle(document.documentElement)
+      .getPropertyValue('--color-brand1-' + (level || 6)).trim();
+    return v || fallback;
+  } catch (e) { return fallback; }
+}
+```
+
+在 `buildOyCss()` 中，品牌色的 HSL 通道值已经在读取时转换：
+
+```javascript
+// 在 buildOyCss() 内部已经完成——见上方 injectOyStyle() 的完整实现
+// --oy-brand: 216 33% 47%   （来自 readBrandColor + hexToHsl）
 ```
